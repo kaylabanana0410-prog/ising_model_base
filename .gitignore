@@ -8,15 +8,6 @@ env/
 
 .idea/
 
-# Keep generated/raw project data out of GitHub.
-Ising_Model_Base/FC data_processed/
-Ising_Model_Base/Jij data_processed/
-Ising_Model_Base/Jij data_raw/
-Ising_Model_Base/Jij_data/
-Ising_Model_Base/simulation data/
-Ising_Model_Base/TS data_raw/
-Ising_Model_Base/TS_Data/
-
 # Nested cloned repositories should not be committed into this repo.
 Ising_Model_Base/.git_nested_backup/
 Ising_Model_Base/Ising/

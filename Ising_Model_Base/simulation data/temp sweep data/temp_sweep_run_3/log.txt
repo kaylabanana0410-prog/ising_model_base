@@ -1,0 +1,35 @@
+SIMULATION LOG
+alpha: 0.8376799642137485
+temp range: 0.5-10.0
+temp steps: 300
+critical temperature: 3.4548494983277593
+mean critical temperature: 1.0233970112810067
+best temperature: 7.362876254180602
+mean best temperature: 2.181034385610006
+partial correlation: False
+include diagonals: False
+time scale: <class 'ising.Jij_sorted_ising'>
+----------------------------------
+highest correlation run:
+SIMULATION LOG
+global temperature: 7.362876254180602
+alpha: 0.8376799642137485
+thermalization: 3000
+partial correlation: False
+time scale: Jij sorted Ising
+run time: 5.478287696838379s
+correlation: 0.4149120850280567
+susceptibility: 0.002700769781126447
+specific heat: 4.777037439160458 
+----------------------------------
+critical temperature run:
+SIMULATION LOG
+global temperature: 3.4548494983277593
+alpha: 0.8376799642137485
+thermalization: 3000
+partial correlation: False
+time scale: Jij sorted Ising
+run time: 5.446669101715088s
+correlation: 0.07233951750169815
+susceptibility: 0.012590012842691659
+specific heat: 46.471099850170496 
