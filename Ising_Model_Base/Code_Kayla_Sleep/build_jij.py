@@ -103,9 +103,10 @@ def print_diagnostics(Jij_init, Jij_new, Rho_thresh, s):
 
 def main():
     np.random.seed(cfg.SEED)
+    subject_ids = getattr(cfg, "SUBJECT_IDS", range(1, cfg.N_SUBJECTS + 1))
 
     print("=" * 65)
-    print(f"BUILD JIJ_NEW (Pearson)  —  {cfg.N_SUBJECTS} subjects  "
+    print(f"BUILD JIJ_NEW (Pearson)  —  {len(subject_ids)} subjects  "
           f"|  threshold={cfg.THRESHOLD}")
     print("=" * 65)
 
@@ -123,7 +124,7 @@ def main():
     os.makedirs(cfg.JIJ_NEW_DIR, exist_ok=True)
     all_Jij_new = []
 
-    for s in range(1, cfg.N_SUBJECTS + 1):
+    for s in subject_ids:
 
         jij_path = os.path.join(cfg.JIJ_DIR, cfg.JIJ_PATTERN.format(s))
         Jij_init  = load_csv(jij_path).astype(float)
@@ -143,7 +144,7 @@ def main():
         all_Jij_new.append(Jij_new)
 
     # average across subjects
-    print(f"\n[averaging]  avg_Jij_new across {cfg.N_SUBJECTS} subjects …")
+    print(f"\n[averaging]  avg_Jij_new across {len(subject_ids)} subjects …")
     avg_Jij_new = np.mean(all_Jij_new, axis=0)
     np.fill_diagonal(avg_Jij_new, 0)
 

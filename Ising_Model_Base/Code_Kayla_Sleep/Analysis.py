@@ -87,7 +87,7 @@ PURPLE = getattr(cfg, "PURPLE", "#6A0572")
 
 # Optional:
 # Set to True if you want final partial-correlation comparison at the end.
-DO_PARTIAL_AT_END = True
+DO_PARTIAL_AT_END = False
 
 # Output paths
 RESULTS_DIR = CODE_DIR / "analysis_results"

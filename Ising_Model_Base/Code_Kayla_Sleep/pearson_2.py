@@ -72,8 +72,10 @@ def symmetric_norm_from_offdiag(mat, percentile=99, min_lim=0.05):
 
 
 # ── data ──────────────────────────────────────────────────────────────────
-J_real  = cfg.avg_Jij.copy()
-rho_emp = cfg.avg_FCp.copy()          # partial empirical FC throughout
+J_real  = np.genfromtxt(cfg.AVG_JIJ_NEW_PATH, delimiter=",").astype(float)
+np.fill_diagonal(J_real, 0)
+rho_emp = cfg.avg_FC.copy()          # Pearson empirical FC throughout
+multiplier = utils.normalize_array(np.mean(J_real, axis=0))
 
 # remove diagonal for comparison
 np.fill_diagonal(rho_emp, 0)
@@ -106,7 +108,7 @@ for restart_idx in range(N_RESTARTS):
         ising      = I.Jij_sorted_ising,
         Jij        = J_real,
         partial    = False,
-        multiplier = utils.normalize_array(cfg.ind_avg_Jij),
+        multiplier = multiplier,
         save       = (restart_idx == 0)
     )
     
@@ -138,9 +140,9 @@ print(f"Annealed alpha* = {alpha_star_annealed:.4f}")
 print(f"Annealing best r = {max(optim.correlate):.4f}")
 
 optim.plot_error(show=False)
-plt.savefig("param_anneal_error.png", dpi=150, bbox_inches="tight")
+plt.savefig("param_anneal_error_3.png", dpi=150, bbox_inches="tight")
 plt.close()
-print("Saved: param_anneal_error.png")
+print("Saved: param_anneal_error_3.png")
 
 
 # ── choose alpha ──────────────────────────────────────────────────────────
@@ -168,7 +170,7 @@ sweep = ts.simulated_FC_vs_T_global(
     alpha      = alpha_star,
     Jij        = J_real,
     ising      = I.Jij_sorted_ising,
-    multiplier = utils.normalize_array(cfg.ind_avg_Jij),
+    multiplier = multiplier,
     save       = True
 )
 
@@ -250,9 +252,9 @@ for ax, data, ylabel, title in panels:
     ax.legend(fontsize=9, framealpha=0.3)
     ax.spines[["top", "right"]].set_visible(False)
 
-plt.savefig("temperature_sweep.png", dpi=150, bbox_inches="tight")
+plt.savefig("temperature_sweep_3.png", dpi=150, bbox_inches="tight")
 plt.close(fig1)
-print("Saved: temperature_sweep.png")
+print("Saved: temperature_sweep_3.png")
 
 
 # ── Figure 2: correlation vs T ────────────────────────────────────────────
@@ -267,21 +269,21 @@ ax_corr.axvline(T_crit, color=RED, linestyle="--", lw=1.5, label=f"T_crit = {T_c
 ax_corr.axvline(T_best, color=AMBER, linestyle=":", lw=1.5, label=f"T_best = {T_best:.2f}")
 
 ax_corr.set_xlabel("global temperature  T", fontsize=11)
-ax_corr.set_ylabel("Pearson r  (sim partial FC vs emp partial FC)", fontsize=11)
+ax_corr.set_ylabel("Pearson r  (sim Pearson FC vs emp Pearson FC)", fontsize=11)
 ax_corr.set_title("Correlation vs Temperature", fontsize=12)
 ax_corr.legend(fontsize=9, framealpha=0.3)
 ax_corr.spines[["top", "right"]].set_visible(False)
 
-plt.savefig("correlation_vs_T.png", dpi=150, bbox_inches="tight")
+plt.savefig("correlation_vs_T_3.png", dpi=150, bbox_inches="tight")
 plt.close(fig_corr)
-print("Saved: correlation_vs_T.png")
+print("Saved: correlation_vs_T_3.png")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# STEP 3 : MATRIX COMPARISON  (T_best) — partial FC only
+# STEP 3 : MATRIX COMPARISON  (T_best) — Pearson FC only
 # ═══════════════════════════════════════════════════════════════════════════
 print("\n" + "=" * 65)
-print("STEP 3 : MATRIX COMPARISON  (T_best, partial FC)")
+print("STEP 3 : MATRIX COMPARISON  (T_best, Pearson FC)")
 print("=" * 65)
 
 best_gd = sweep.best_ising
@@ -338,8 +340,8 @@ fig3.suptitle(
 )
 
 matrix_panels = [
-    (sim_FC,  f"Simulated partial FC\n(T={T_best:.2f}, alpha={alpha_star:.2f})", fc_norm),
-    (rho_emp, "Empirical partial FC", fc_norm),
+    (sim_FC,  f"Simulated Pearson FC\n(T={T_best:.2f}, alpha={alpha_star:.2f})", fc_norm),
+    (rho_emp, "Empirical Pearson FC", fc_norm),
     (Jij_mat, "Structural connectivity  $J_{ij}$", j_norm),
 ]
 
@@ -350,7 +352,7 @@ for ax, (mat, title, norm_to_use) in zip(axes3, matrix_panels):
     ax.set_ylabel("region", fontsize=9)
     plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
 
-plt.savefig("matrix_comparison.png", dpi=150, bbox_inches="tight")
+plt.savefig("matrix_comparison_3.png", dpi=150, bbox_inches="tight")
 plt.close(fig3)
 
 
@@ -371,22 +373,22 @@ x_line = np.linspace(rho_emp_vec.min(), rho_emp_vec.max(), 200)
 
 ax3s.plot(x_line, m * x_line + b, color="black", lw=1.5, linestyle="--")
 
-ax3s.set_xlabel("empirical partial FC", fontsize=11)
-ax3s.set_ylabel("simulated partial FC", fontsize=11)
-ax3s.set_title(f"Sim vs Emp partial FC  (r = {r_best:.4f})", fontsize=12)
+ax3s.set_xlabel("empirical Pearson FC", fontsize=11)
+ax3s.set_ylabel("simulated Pearson FC", fontsize=11)
+ax3s.set_title(f"Sim vs Emp Pearson FC  (r = {r_best:.4f})", fontsize=12)
 ax3s.spines[["top", "right"]].set_visible(False)
 
-plt.savefig("scatter_sim_vs_emp.png", dpi=150, bbox_inches="tight")
+plt.savefig("scatter_sim_vs_emp_3.png", dpi=150, bbox_inches="tight")
 plt.close(fig3s)
 
-print("Saved: matrix_comparison.png, scatter_sim_vs_emp.png")
+print("Saved: matrix_comparison_3.png, scatter_sim_vs_emp_3.png")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 # STEP 4 : NULL DISTRIBUTION
 # ═══════════════════════════════════════════════════════════════════════════
 print("\n" + "=" * 65)
-print(f"STEP 4 : NULL DISTRIBUTION  (N={N_NULL}, partial=True)")
+print(f"STEP 4 : NULL DISTRIBUTION  (N={N_NULL}, partial=False)")
 print(f"         T_best = {T_best:.3f}  |  alpha = {alpha_star:.3f}")
 print("=" * 65)
 
@@ -605,10 +607,10 @@ plot_null(
     title="null distribution — dissimilarity"
 )
 
-plt.savefig("ising_null_distributions.png", dpi=150, bbox_inches="tight")
+plt.savefig("ising_null_distributions_3.png", dpi=150, bbox_inches="tight")
 plt.close(fig4)
 
-print("Saved: ising_null_distributions.png")
+print("Saved: ising_null_distributions_3.png")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -627,8 +629,8 @@ else:
     print(f"Used alpha         = {alpha_star:.4f}  [annealed value]")
 
 print(f"T_crit            = {T_crit:.4f}  (peak specific heat)")
-print(f"T_best            = {T_best:.4f}  (peak Pearson r, partial FC)")
-print(f"best r            = {r_best:.4f}  (partial FC)")
+print(f"T_best            = {T_best:.4f}  (peak Pearson r, Pearson FC)")
+print(f"best r            = {r_best:.4f}  (Pearson FC)")
 print(f"eucl. distance    = {dist_best:.4f}")
 print(f"dissimilarity     = {diss_best:.4f}")
 print(f"p (dist)          = {p_dist:.4f}")
@@ -640,11 +642,11 @@ print(f"Cliff's δ (diss)  = {cld_diss:.4f}  [{cliffs_magnitude(cld_diss)}]")
 
 print("\nOutput files:")
 for f in [
-    "param_anneal_error.png",
-    "temperature_sweep.png",
-    "correlation_vs_T.png",
-    "matrix_comparison.png",
-    "scatter_sim_vs_emp.png",
-    "ising_null_distributions.png"
+    "param_anneal_error_3.png",
+    "temperature_sweep_3.png",
+    "correlation_vs_T_3.png",
+    "matrix_comparison_3.png",
+    "scatter_sim_vs_emp_3.png",
+    "ising_null_distributions_3.png"
 ]:
     print(f"  {f}")

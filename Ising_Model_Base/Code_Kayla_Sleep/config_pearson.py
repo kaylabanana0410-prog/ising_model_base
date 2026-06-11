@@ -1,8 +1,29 @@
 from pathlib import Path
+import numpy as np
 
 # Paths
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 OUTPUT_DIR = Path(__file__).resolve().parent
+
+JIJ_DIR = PROJECT_ROOT / "Jij data_raw"
+JIJ_PATTERN = "Jij_{}.csv"
+JIJ_NEW_DIR = OUTPUT_DIR / "Jij_new_pearson"
+AVG_JIJ_NEW_PATH = JIJ_NEW_DIR / "avg_Jij_new_pearson.csv"
+
+FC1_PATH = PROJECT_ROOT / "FC data_processed" / "avg_TS_1"
+FC2_PATH = PROJECT_ROOT / "FC data_processed" / "avg_TS_2"
+FC3_PATH = PROJECT_ROOT / "FC data_processed" / "avg_TS_3"
+RHO_SIMULATED_PATH = OUTPUT_DIR / "Rho_sim_pearson.csv"
+
+# Data settings
+SUBJECT_IDS = list(range(2, 26))
+N_SUBJECTS = len(SUBJECT_IDS)
+THRESHOLD = 0.1
+PARTIAL = False
+
+# Simulation settings
+SIM_STEPS = 10000
+SIM_THERMALIZATION = 5000
 
 # Random seed
 SEED = 1
@@ -36,3 +57,24 @@ BLUE = "#2E86AB"
 RED = "#E84855"
 AMBER = "#F4A261"
 PURPLE = "#6A0572"
+
+
+def load_csv(path: Path) -> np.ndarray:
+    return np.genfromtxt(path, delimiter=",", dtype=float)
+
+
+# Compatibility values used by older pearson scripts.
+avg_Jij = load_csv(PROJECT_ROOT / "Jij data_processed" / "avg_Jij_no_outliers_norm")
+regions = avg_Jij.shape[0]
+
+FC_1 = load_csv(FC1_PATH)
+FC_2 = load_csv(FC2_PATH)
+FC_3 = load_csv(FC3_PATH)
+avg_FC = (FC_1 + FC_2 + FC_3) / 3.0
+
+FC_1p = load_csv(PROJECT_ROOT / "FC data_processed" / "avg_TS_1p")
+FC_2p = load_csv(PROJECT_ROOT / "FC data_processed" / "avg_TS_2p")
+FC_3p = load_csv(PROJECT_ROOT / "FC data_processed" / "avg_TS_3p")
+avg_FCp = (FC_1p + FC_2p + FC_3p) / 3.0
+
+ind_avg_Jij = np.mean(avg_Jij, axis=0)
