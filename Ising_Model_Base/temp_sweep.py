@@ -38,16 +38,24 @@ class simulated_FC_vs_T_global:
 
         self.ising_ar = []
         self.suscept_ar = []
+        self.suscept_se_ar = []
         self.spec_heat_ar = []
+        self.spec_heat_se_ar = []
+        self.avg_energy_ar = []
+        self.avg_energy_se_ar = []
+        self.avg_mag_ar = []
+        self.avg_mag_se_ar = []
         self.avg_temp_ar = []
         self.Jij_auc_ar, self.FC_auc_ar = [], []
         self.corr_ar_1, self.corr_ar_2, self.corr_ar_3, self.corr_ar_total = [], [], [], []
+        self.corr_se_ar_1, self.corr_se_ar_2, self.corr_se_ar_3, self.corr_se_ar_total = [], [], [], []
 
         self.save = save
 
     def simulate(self, steps, thermalization = None, spin_array = np.random.choice([-1, 1], 84),
                  partial = True, show = False, diag = False, text = True,
-                 name = 'temp_sweep', path = 'simulation data/temp sweep data/'):
+                 name = 'temp_sweep', path = 'simulation data/temp sweep data/',
+                 n_repeats = 1):
 
         '''
         Main class for preforming the temperature sweep simulations
@@ -121,31 +129,95 @@ class simulated_FC_vs_T_global:
 
         if show:
             plt.ion()
+        def mean_se(values):
+            values = np.asarray(values, dtype=float)
+            mean = np.nanmean(values)
+            if values.size <= 1:
+                return mean, 0.0
+            return mean, np.nanstd(values, ddof=1) / np.sqrt(values.size)
+
         for temp in self.T_global:
             temp_ar = temp * (self.multiplier ** self.alpha)
             avg_temp = np.mean(temp_ar)
             beta = 1 / temp
-            ising = self.ising(temp_ar, Jij=self.Jij, spin_ar=spin_array)
-            ising.simulate(steps, thermalization)
-            sim_FC = ising.generate_FC(partial)
-            ising_data = I.get_data(ising, beta, temp, self.alpha, emp_FC=avg_FC, diag=diag)
+            repeat_data = []
+            repeat_corr_1, repeat_corr_2, repeat_corr_3, repeat_corr_total = [], [], [], []
+            repeat_suscept, repeat_spec_heat = [], []
+            repeat_avg_energy, repeat_avg_mag = [], []
+            repeat_jij_auc, repeat_fc_auc = [], []
+
+            for repeat_idx in range(n_repeats):
+                if n_repeats == 1 and spin_array is not None:
+                    init_spin = spin_array.copy()
+                else:
+                    init_spin = np.random.choice([-1, 1], np.shape(self.Jij)[0])
+
+                ising = self.ising(temp_ar, Jij=self.Jij, spin_ar=init_spin)
+                ising.simulate(steps, thermalization)
+                sim_FC = ising.generate_FC(partial)
+                ising_data = I.get_data(ising, beta, temp, self.alpha, emp_FC=avg_FC, diag=diag)
+
+                corr_1 = ising.correlation(emp_FC1, diag)
+                corr_2 = ising.correlation(emp_FC2, diag)
+                corr_3 = ising.correlation(emp_FC3, diag)
+                corr_total = ising.correlation(avg_FC, diag)
+
+                Jij_tpr_ar, Jij_fpr_ar, Jij_auc = utils.receiver_operating_characteristic(sim_FC, self.Jij)
+                FC_tpr_ar, FC_fpr_ar, FC_auc = utils.receiver_operating_characteristic(sim_FC, avg_FC)
+
+                repeat_data.append(ising_data)
+                repeat_corr_1.append(corr_1)
+                repeat_corr_2.append(corr_2)
+                repeat_corr_3.append(corr_3)
+                repeat_corr_total.append(corr_total)
+                repeat_suscept.append(ising.susceptibility(beta))
+                repeat_spec_heat.append(ising.specific_heat(beta))
+                repeat_avg_energy.append(np.mean(ising.energy_series))
+                repeat_avg_mag.append(np.mean(np.abs(ising.mag_series)))
+                repeat_jij_auc.append(Jij_auc)
+                repeat_fc_auc.append(FC_auc)
+
+            best_repeat_index = int(np.nanargmax(repeat_corr_total))
+            ising_data = repeat_data[best_repeat_index]
+
             if text:
                 print(ising_data)
+                if n_repeats > 1:
+                    print(f'repeats: {n_repeats}; mean correlation: {np.nanmean(repeat_corr_total):.4f}')
                 print('_____________________________')
 
-            Jij_tpr_ar, Jij_fpr_ar, Jij_auc = utils.receiver_operating_characteristic(sim_FC, self.Jij)
-            FC_tpr_ar, FC_fpr_ar, FC_auc = utils.receiver_operating_characteristic(sim_FC, avg_FC)
-            self.Jij_auc_ar.append(Jij_auc)
-            self.FC_auc_ar.append(FC_auc)
+            jij_auc, jij_auc_se = mean_se(repeat_jij_auc)
+            fc_auc, fc_auc_se = mean_se(repeat_fc_auc)
+            corr_1, corr_1_se = mean_se(repeat_corr_1)
+            corr_2, corr_2_se = mean_se(repeat_corr_2)
+            corr_3, corr_3_se = mean_se(repeat_corr_3)
+            corr_total, corr_total_se = mean_se(repeat_corr_total)
+            suscept, suscept_se = mean_se(repeat_suscept)
+            spec_heat, spec_heat_se = mean_se(repeat_spec_heat)
+            avg_energy, avg_energy_se = mean_se(repeat_avg_energy)
+            avg_mag, avg_mag_se = mean_se(repeat_avg_mag)
+
+            self.Jij_auc_ar.append(jij_auc)
+            self.FC_auc_ar.append(fc_auc)
 
             self.avg_temp_ar.append(avg_temp)
-            self.corr_ar_1.append(ising.correlation(emp_FC1, diag))
-            self.corr_ar_2.append(ising.correlation(emp_FC2, diag))
-            self.corr_ar_3.append(ising.correlation(emp_FC3, diag))
-            self.corr_ar_total.append(ising.correlation(avg_FC, diag))
+            self.corr_ar_1.append(corr_1)
+            self.corr_ar_2.append(corr_2)
+            self.corr_ar_3.append(corr_3)
+            self.corr_ar_total.append(corr_total)
+            self.corr_se_ar_1.append(corr_1_se)
+            self.corr_se_ar_2.append(corr_2_se)
+            self.corr_se_ar_3.append(corr_3_se)
+            self.corr_se_ar_total.append(corr_total_se)
             self.ising_ar.append(ising_data)
-            self.suscept_ar.append(ising.susceptibility(beta))
-            self.spec_heat_ar.append(ising.specific_heat(beta))
+            self.suscept_ar.append(suscept)
+            self.suscept_se_ar.append(suscept_se)
+            self.spec_heat_ar.append(spec_heat)
+            self.spec_heat_se_ar.append(spec_heat_se)
+            self.avg_energy_ar.append(avg_energy)
+            self.avg_energy_se_ar.append(avg_energy_se)
+            self.avg_mag_ar.append(avg_mag)
+            self.avg_mag_se_ar.append(avg_mag_se)
 
             if show:
                 if temp != self.T_global[0]:

@@ -29,6 +29,7 @@ N_RESTARTS    = 5 ##  5 annealing runs and picks the best one
 T_MIN         = 2
 T_MAX         = 25
 T_STEPS       = 400
+TEMP_REPEATS  = 3
 
 N_NULL        = 100
 NULL_RUNS     = 5
@@ -178,7 +179,8 @@ sweep.simulate(
     steps          = ANNEAL_STEPS,
     thermalization = ANNEAL_THERM,
     partial        = False,
-    text           = True
+    text           = True,
+    n_repeats      = TEMP_REPEATS
 )
 
 # ── NaN guard ─────────────────────────────────────────────────────────────
@@ -208,8 +210,14 @@ print(f"Best Pearson r                         : {best_corr:.4f}")
 
 
 # ── observables ───────────────────────────────────────────────────────────
-avg_energy = np.array([np.mean(gd.ising.energy_series) for gd in sweep.ising_ar])
-avg_mag    = np.array([np.mean(np.abs(gd.ising.mag_series)) for gd in sweep.ising_ar])
+avg_energy = np.array(sweep.avg_energy_ar)
+avg_energy_se = np.array(sweep.avg_energy_se_ar)
+avg_mag = np.array(sweep.avg_mag_ar)
+avg_mag_se = np.array(sweep.avg_mag_se_ar)
+suscept = np.array(sweep.suscept_ar)
+suscept_se = np.array(sweep.suscept_se_ar)
+spec_heat = np.array(sweep.spec_heat_ar)
+spec_heat_se = np.array(sweep.spec_heat_se_ar)
 
 
 # ── Figure 1: E, |M|, susceptibility, specific heat vs T ──────────────────
@@ -221,14 +229,15 @@ fig1.suptitle(
 )
 
 panels = [
-    (axes1[0, 0], avg_energy,         r"average energy $\langle E \rangle$", "Energy vs T"),
-    (axes1[0, 1], avg_mag,            r"average $|M|$",                       "|Magnetization| vs T"),
-    (axes1[1, 0], sweep.suscept_ar,   r"susceptibility $\chi$",               "Susceptibility vs T"),
-    (axes1[1, 1], sweep.spec_heat_ar, r"specific heat $C$",                   "Specific Heat vs T"),
+    (axes1[0, 0], avg_energy, avg_energy_se, r"average energy $\langle E \rangle$", "Energy vs T"),
+    (axes1[0, 1], avg_mag, avg_mag_se, r"average $|M|$", "|Magnetization| vs T"),
+    (axes1[1, 0], suscept, suscept_se, r"susceptibility $\chi$", "Susceptibility vs T"),
+    (axes1[1, 1], spec_heat, spec_heat_se, r"specific heat $C$", "Specific Heat vs T"),
 ]
 
-for ax, data, ylabel, title in panels:
+for ax, data, se, ylabel, title in panels:
     ax.plot(T_global, data, "o-", color=BLUE, lw=1.8, ms=3)
+    ax.fill_between(T_global, data - se, data + se, color=BLUE, alpha=0.18, linewidth=0)
 
     ax.axvline(
         T_crit,
@@ -260,10 +269,14 @@ print("Saved: temperature_sweep_3.png")
 # ── Figure 2: correlation vs T ────────────────────────────────────────────
 fig_corr, ax_corr = plt.subplots(figsize=(7, 4), constrained_layout=True)
 
-ax_corr.plot(T_global, sweep.corr_ar_total, color=BLUE,    lw=2, label="avg FC")
-ax_corr.plot(T_global, sweep.corr_ar_1,     color="green",  lw=1, label="FC1", alpha=0.7)
-ax_corr.plot(T_global, sweep.corr_ar_2,     color="purple", lw=1, label="FC2", alpha=0.7)
-ax_corr.plot(T_global, sweep.corr_ar_3,     color="orange", lw=1, label="FC3", alpha=0.7)
+for data, se, color, label, lw, alpha in [
+    (np.array(sweep.corr_ar_total), np.array(sweep.corr_se_ar_total), BLUE, "avg FC", 2, 1.0),
+    (np.array(sweep.corr_ar_1), np.array(sweep.corr_se_ar_1), "green", "FC1", 1, 0.7),
+    (np.array(sweep.corr_ar_2), np.array(sweep.corr_se_ar_2), "purple", "FC2", 1, 0.7),
+    (np.array(sweep.corr_ar_3), np.array(sweep.corr_se_ar_3), "orange", "FC3", 1, 0.7),
+]:
+    ax_corr.plot(T_global, data, color=color, lw=lw, label=label, alpha=alpha)
+    ax_corr.fill_between(T_global, data - se, data + se, color=color, alpha=0.12, linewidth=0)
 
 ax_corr.axvline(T_crit, color=RED, linestyle="--", lw=1.5, label=f"T_crit = {T_crit:.2f}")
 ax_corr.axvline(T_best, color=AMBER, linestyle=":", lw=1.5, label=f"T_best = {T_best:.2f}")
