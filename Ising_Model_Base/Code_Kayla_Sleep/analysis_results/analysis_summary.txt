@@ -1,0 +1,26 @@
+ISING MODEL ANALYSIS SUMMARY
+==================================================
+
+Main analysis type: Pearson FC
+Jij input: avg_Jij_new_pearson.csv
+
+N regions: 84
+Annealed T*: 7.100570
+Annealed alpha*: 0.940921
+Used alpha: 0.940921
+
+T_crit peak specific heat: 3.671679
+T_best peak Pearson r: 6.611529
+Best Pearson r: 0.499036
+Euclidean distance: 10.001726
+Dissimilarity 1-r: 0.500964
+
+Sim FC negative fraction: 0.046472
+Emp FC negative fraction: 0.439185
+
+Null distribution
+N_NULL: 100
+Null mean r: 0.002004
+Null std r: 0.018125
+Empirical p-value: 0.000000
+
