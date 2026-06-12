@@ -131,6 +131,8 @@ class simulated_FC_vs_T_global:
             plt.ion()
         def mean_se(values):
             values = np.asarray(values, dtype=float)
+            if not np.any(np.isfinite(values)):
+                return np.nan, np.nan
             mean = np.nanmean(values)
             if values.size <= 1:
                 return mean, 0.0
@@ -177,13 +179,18 @@ class simulated_FC_vs_T_global:
                 repeat_jij_auc.append(Jij_auc)
                 repeat_fc_auc.append(FC_auc)
 
-            best_repeat_index = int(np.nanargmax(repeat_corr_total))
+            repeat_corr_total_arr = np.asarray(repeat_corr_total, dtype=float)
+            if np.any(np.isfinite(repeat_corr_total_arr)):
+                best_repeat_index = np.nanargmax(repeat_corr_total_arr)
+            else:
+                best_repeat_index = 0
             ising_data = repeat_data[best_repeat_index]
 
             if text:
                 print(ising_data)
                 if n_repeats > 1:
-                    print(f'repeats: {n_repeats}; mean correlation: {np.nanmean(repeat_corr_total):.4f}')
+                    mean_corr, _ = mean_se(repeat_corr_total)
+                    print(f'repeats: {n_repeats}; mean correlation: {mean_corr:.4f}')
                 print('_____________________________')
 
             jij_auc, jij_auc_se = mean_se(repeat_jij_auc)

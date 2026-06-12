@@ -26,10 +26,10 @@ ANNEAL_THERM  = 5000
 
 N_RESTARTS    = 5 ##  5 annealing runs and picks the best one
 
-T_MIN         = 2
-T_MAX         = 25
-T_STEPS       = 400
-TEMP_REPEATS  = 3
+T_MIN         = 1.5
+T_MAX         = 18
+T_STEPS       = 150
+TEMP_REPEATS  = 10
 
 N_NULL        = 100
 NULL_RUNS     = 5
