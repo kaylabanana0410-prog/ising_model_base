@@ -66,9 +66,10 @@ ANNEAL_MAXFUN = getattr(cfg, "ANNEAL_MAXFUN", 500)
 ANNEAL_THERM = getattr(cfg, "ANNEAL_THERM", 5000)
 N_RESTARTS = getattr(cfg, "N_RESTARTS", 5)
 
-T_MIN = getattr(cfg, "T_MIN", 2)
-T_MAX = getattr(cfg, "T_MAX", 25)
-T_STEPS = getattr(cfg, "T_STEPS", 400)
+T_MIN = 1.5
+T_MAX = 18
+T_STEPS = 150
+TEMP_REPEATS = 10
 
 N_NULL = getattr(cfg, "N_NULL", 100)
 NULL_RUNS = getattr(cfg, "NULL_RUNS", 5)
@@ -416,6 +417,7 @@ def main():
         thermalization=ANNEAL_THERM,
         partial=False,       # Pearson only
         text=True,
+        n_repeats=TEMP_REPEATS,
     )
 
     corr_arr = np.array(sweep.corr_ar_total, dtype=float)
@@ -441,10 +443,14 @@ def main():
     print(f"Best Pearson r: {best_corr:.4f}")
 
     # Observables
-    avg_energy = np.array([np.mean(gd.ising.energy_series) for gd in sweep.ising_ar])
-    avg_mag = np.array([np.mean(np.abs(gd.ising.mag_series)) for gd in sweep.ising_ar])
+    avg_energy = np.array(sweep.avg_energy_ar, dtype=float)
+    avg_energy_se = np.array(sweep.avg_energy_se_ar, dtype=float)
+    avg_mag = np.array(sweep.avg_mag_ar, dtype=float)
+    avg_mag_se = np.array(sweep.avg_mag_se_ar, dtype=float)
     suscept = np.array(sweep.suscept_ar, dtype=float)
+    suscept_se = np.array(sweep.suscept_se_ar, dtype=float)
     spec_heat = np.array(sweep.spec_heat_ar, dtype=float)
+    spec_heat_se = np.array(sweep.spec_heat_se_ar, dtype=float)
 
     # ── Figure 1: thermodynamic observables
     fig1, axes = plt.subplots(2, 2, figsize=(13, 9), constrained_layout=True)
@@ -456,14 +462,15 @@ def main():
     )
 
     panels = [
-        (axes[0, 0], avg_energy, r"average energy $\langle E \rangle$", "Energy vs T"),
-        (axes[0, 1], avg_mag, r"average $|M|$", "|Magnetization| vs T"),
-        (axes[1, 0], suscept, r"susceptibility $\chi$", "Susceptibility vs T"),
-        (axes[1, 1], spec_heat, r"specific heat $C$", "Specific Heat vs T"),
+        (axes[0, 0], avg_energy, avg_energy_se, r"average energy $\langle E \rangle$", "Energy vs T"),
+        (axes[0, 1], avg_mag, avg_mag_se, r"average $|M|$", "|Magnetization| vs T"),
+        (axes[1, 0], suscept, suscept_se, r"susceptibility $\chi$", "Susceptibility vs T"),
+        (axes[1, 1], spec_heat, spec_heat_se, r"specific heat $C$", "Specific Heat vs T"),
     ]
 
-    for ax, data, ylabel, title in panels:
+    for ax, data, se, ylabel, title in panels:
         ax.plot(T_global, data, "o-", color=BLUE, lw=1.8, ms=3)
+        ax.fill_between(T_global, data - se, data + se, color=BLUE, alpha=0.18, linewidth=0)
         ax.axvline(
             T_crit,
             color=RED,
@@ -492,7 +499,9 @@ def main():
     # ── Figure 2: correlation vs T
     fig2, ax = plt.subplots(figsize=(7, 4), constrained_layout=True)
 
+    corr_se = np.array(sweep.corr_se_ar_total, dtype=float)
     ax.plot(T_global, corr_arr, color=BLUE, lw=2, label="avg empirical Pearson FC")
+    ax.fill_between(T_global, corr_arr - corr_se, corr_arr + corr_se, color=BLUE, alpha=0.18, linewidth=0)
     ax.axvline(T_crit, color=RED, linestyle="--", lw=1.5, label=f"T_crit = {T_crit:.2f}")
     ax.axvline(T_best, color=AMBER, linestyle=":", lw=1.5, label=f"T_best = {T_best:.2f}")
 
@@ -724,6 +733,9 @@ def main():
 
         f.write(f"T_crit peak specific heat: {T_crit:.6f}\n")
         f.write(f"T_best peak Pearson r: {T_best:.6f}\n")
+        f.write(f"T range: {T_MIN:.6f} to {T_MAX:.6f}\n")
+        f.write(f"T steps: {T_STEPS}\n")
+        f.write(f"Temperature repeats: {TEMP_REPEATS}\n")
         f.write(f"Best Pearson r: {r_best:.6f}\n")
         f.write(f"Euclidean distance: {dist_best:.6f}\n")
         f.write(f"Dissimilarity 1-r: {diss_best:.6f}\n\n")

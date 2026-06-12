@@ -18,7 +18,7 @@ RHO_SIMULATED_PATH = OUTPUT_DIR / "Rho_sim_pearson.csv"
 # Data settings
 SUBJECT_IDS = list(range(2, 26))
 N_SUBJECTS = len(SUBJECT_IDS)
-THRESHOLD = 0.1
+THRESHOLD = 0.05
 PARTIAL = False
 
 # Simulation settings
@@ -35,9 +35,10 @@ ANNEAL_THERM = 5000
 N_RESTARTS = 5
 
 # Temperature sweep settings
-T_MIN = 2
-T_MAX = 25
-T_STEPS = 400
+T_MIN = 1.5
+T_MAX = 18
+T_STEPS = 150
+TEMP_REPEATS = 10
 
 # Null distribution settings
 N_NULL = 100
