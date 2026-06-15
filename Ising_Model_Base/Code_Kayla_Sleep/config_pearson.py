@@ -21,6 +21,10 @@ N_SUBJECTS = len(SUBJECT_IDS)
 THRESHOLD = 0.05
 PARTIAL = False
 
+# True  = set empirical/simulated FC diagonals to 0 and compare off-diagonal FC only.
+# False = set empirical/simulated FC diagonals to 1 and include diagonals in FC correlations.
+ZERO_FC_DIAGONAL = False
+
 # Simulation settings
 SIM_STEPS = 10000
 SIM_THERMALIZATION = 5000

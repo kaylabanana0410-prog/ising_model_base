@@ -71,6 +71,10 @@ T_MAX = 18
 T_STEPS = 150
 TEMP_REPEATS = 10
 
+# True  = set empirical/simulated FC diagonals to 0 and compare off-diagonal FC only.
+# False = set empirical/simulated FC diagonals to 1 and include diagonals in FC correlations.
+ZERO_FC_DIAGONAL = getattr(cfg, "ZERO_FC_DIAGONAL", True)
+
 N_NULL = getattr(cfg, "N_NULL", 100)
 NULL_RUNS = getattr(cfg, "NULL_RUNS", 5)
 NULL_STEPS = getattr(cfg, "NULL_STEPS", 2000)
@@ -140,6 +144,17 @@ def save_csv(mat: np.ndarray, path: Path) -> None:
     np.savetxt(path, mat, delimiter=",")
 
 
+def set_fc_diagonal(mat: np.ndarray) -> np.ndarray:
+    np.fill_diagonal(mat, 0 if ZERO_FC_DIAGONAL else 1)
+    return mat
+
+
+def fc_compare_vec(mat: np.ndarray) -> np.ndarray:
+    if ZERO_FC_DIAGONAL:
+        return upper_tri_vec(mat)
+    return mat.ravel()
+
+
 def find_existing_path(candidates, label: str) -> Path:
     for p in candidates:
         if p.exists():
@@ -170,7 +185,7 @@ def load_empirical_pearson_fc() -> np.ndarray:
 
     if hasattr(base_cfg, "avg_FC"):
         rho = base_cfg.avg_FC.copy().astype(float)
-        np.fill_diagonal(rho, 0)
+        set_fc_diagonal(rho)
         print("Loaded empirical Pearson FC from base config: base_cfg.avg_FC")
         return rho
 
@@ -184,11 +199,11 @@ def load_empirical_pearson_fc() -> np.ndarray:
         mats = []
         for p in fc_paths:
             mat = load_csv(Path(p)).astype(float)
-            np.fill_diagonal(mat, 0)
+            set_fc_diagonal(mat)
             mats.append(mat)
 
         rho = np.mean(mats, axis=0)
-        np.fill_diagonal(rho, 0)
+        set_fc_diagonal(rho)
         print("Loaded empirical Pearson FC from cfg.FC1_PATH/FC2_PATH/FC3_PATH")
         return rho
 
@@ -202,7 +217,7 @@ def load_empirical_partial_fc_or_none() -> np.ndarray | None:
     """Optional final comparison only."""
     if hasattr(base_cfg, "avg_FCp"):
         rho = base_cfg.avg_FCp.copy().astype(float)
-        np.fill_diagonal(rho, 0)
+        set_fc_diagonal(rho)
         print("Loaded empirical partial FC from base config: base_cfg.avg_FCp")
         return rho
 
@@ -270,7 +285,7 @@ def run_single_ising_fc(
             raise AttributeError("Could not find generated FC in Ising object.")
 
     fc = np.asarray(fc, dtype=float)
-    np.fill_diagonal(fc, 0)
+    set_fc_diagonal(fc)
     return fc
 
 
@@ -314,7 +329,7 @@ def main():
         f"Shape mismatch: J_real {J_real.shape} vs rho_emp {rho_emp.shape}"
     )
 
-    rho_emp_vec = upper_tri_vec(rho_emp)
+    rho_emp_vec = fc_compare_vec(rho_emp)
     J_vec = upper_tri_vec(J_real)
 
     print(f"J_real shape: {J_real.shape}")
@@ -416,6 +431,7 @@ def main():
         steps=ANNEAL_STEPS,
         thermalization=ANNEAL_THERM,
         partial=False,       # Pearson only
+        diag=not ZERO_FC_DIAGONAL,
         text=True,
         n_repeats=TEMP_REPEATS,
     )
@@ -529,10 +545,10 @@ def main():
     sim_FC = best_gd.FC.copy()
     Jij_mat = best_gd.Jij.copy()
 
-    np.fill_diagonal(sim_FC, 0)
+    set_fc_diagonal(sim_FC)
     np.fill_diagonal(Jij_mat, 0)
 
-    sim_FC_vec = upper_tri_vec(sim_FC)
+    sim_FC_vec = fc_compare_vec(sim_FC)
     Jij_vec = upper_tri_vec(Jij_mat)
 
     r_best = safe_pearson(sim_FC_vec, rho_emp_vec)
@@ -637,9 +653,9 @@ def main():
             fc_sum += fc_null
 
         fc_null_avg = fc_sum / NULL_RUNS
-        np.fill_diagonal(fc_null_avg, 0)
+        set_fc_diagonal(fc_null_avg)
 
-        null_vec = upper_tri_vec(fc_null_avg)
+        null_vec = fc_compare_vec(fc_null_avg)
         r_null = safe_pearson(null_vec, rho_emp_vec)
 
         null_corr.append(r_null)
@@ -701,8 +717,8 @@ def main():
                 partial=True,
             )
 
-            rho_emp_partial_vec = upper_tri_vec(rho_emp_partial)
-            sim_partial_vec = upper_tri_vec(sim_partial)
+            rho_emp_partial_vec = fc_compare_vec(rho_emp_partial)
+            sim_partial_vec = fc_compare_vec(sim_partial)
 
             partial_r = safe_pearson(sim_partial_vec, rho_emp_partial_vec)
             partial_dist = np.linalg.norm(sim_partial_vec - rho_emp_partial_vec)

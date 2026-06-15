@@ -31,6 +31,10 @@ T_MAX         = 18
 T_STEPS       = 150
 TEMP_REPEATS  = 10
 
+# True  = set empirical/simulated FC diagonals to 0 and compare off-diagonal FC only.
+# False = set empirical/simulated FC diagonals to 1 and include diagonals in FC correlations.
+ZERO_FC_DIAGONAL = getattr(cfg, "ZERO_FC_DIAGONAL", True)
+
 N_NULL        = 100
 NULL_RUNS     = 5
 NULL_STEPS    = 2000
@@ -58,6 +62,17 @@ def upper_tri_vec(mat):
     return mat[idx]
 
 
+def set_fc_diagonal(mat):
+    np.fill_diagonal(mat, 0 if ZERO_FC_DIAGONAL else 1)
+    return mat
+
+
+def fc_compare_vec(mat):
+    if ZERO_FC_DIAGONAL:
+        return upper_tri_vec(mat)
+    return mat.ravel()
+
+
 def symmetric_norm_from_offdiag(mat, percentile=99, min_lim=0.05):
     """
     Creates a symmetric TwoSlopeNorm centered at 0.
@@ -78,10 +93,10 @@ np.fill_diagonal(J_real, 0)
 rho_emp = cfg.avg_FC.copy()          # Pearson empirical FC throughout
 multiplier = utils.normalize_array(np.mean(J_real, axis=0))
 
-# remove diagonal for comparison
-np.fill_diagonal(rho_emp, 0)
+# Set FC diagonal for plotting/saving and choose whether comparisons include it.
+set_fc_diagonal(rho_emp)
 
-rho_emp_vec = upper_tri_vec(rho_emp)
+rho_emp_vec = fc_compare_vec(rho_emp)
 
 print("J_real min:          ", J_real.min())
 print("J_real max:          ", J_real.max())
@@ -179,6 +194,7 @@ sweep.simulate(
     steps          = ANNEAL_STEPS,
     thermalization = ANNEAL_THERM,
     partial        = False,
+    diag           = not ZERO_FC_DIAGONAL,
     text           = True,
     n_repeats      = TEMP_REPEATS
 )
@@ -303,9 +319,9 @@ best_gd = sweep.best_ising
 sim_FC  = best_gd.FC.copy()
 Jij_mat = best_gd.Jij.copy()
 
-np.fill_diagonal(sim_FC, 0)
+set_fc_diagonal(sim_FC)
 
-sim_FC_vec = upper_tri_vec(sim_FC)
+sim_FC_vec = fc_compare_vec(sim_FC)
 
 r_best    = pearsonr(sim_FC_vec, rho_emp_vec)[0]
 dist_best = np.linalg.norm(sim_FC_vec - rho_emp_vec)
@@ -442,7 +458,7 @@ def run_ising_avg(J, T_global_value, alpha, n_runs=NULL_RUNS):
         fc_sum += sim.functional_connectivity
 
     rho = fc_sum / n_runs
-    np.fill_diagonal(rho, 0)
+    set_fc_diagonal(rho)
 
     return rho
 
@@ -457,7 +473,7 @@ for i in range(N_NULL):
     # Use T_best here because the real model was evaluated at T_best.
     rho_null = run_ising_avg(J_null, T_best, alpha_star)
 
-    vec_null = upper_tri_vec(rho_null)
+    vec_null = fc_compare_vec(rho_null)
 
     r_null = pearsonr(vec_null, rho_emp_vec)[0]
 
