@@ -1,0 +1,51 @@
+{
+	"folders": [
+		{
+			"name": "Code_Kayla_Sleep",
+			"path": "../Ising_Model_Base/Code_Kayla_Sleep"
+		},
+		{
+			"name": "Code_mathews",
+			"path": "../Ising_Model_Base/Code_mathews"
+		},
+		{
+			"name": "FC data_processed",
+			"path": "../Ising_Model_Base/FC data_processed"
+		},
+		{
+			"name": "Ising",
+			"path": "../Ising_Model_Base/Ising"
+		},
+		{
+			"name": "Jij_data",
+			"path": "../Ising_Model_Base/Jij_data"
+		},
+		{
+			"name": "Jij data_processed",
+			"path": "../Ising_Model_Base/Jij data_processed"
+		},
+		{
+			"name": "Jij data_raw",
+			"path": "../Ising_Model_Base/Jij data_raw"
+		},
+		{
+			"name": "simulation data",
+			"path": "../Ising_Model_Base/simulation data"
+		},
+		{
+			"name": "TS_Data",
+			"path": "../Ising_Model_Base/TS_Data"
+		},
+		{
+			"name": "TS data_raw",
+			"path": "../Ising_Model_Base/TS data_raw"
+		},
+		{
+			"name": "Kayla",
+			"path": ".."
+		}
+	],
+	"settings": {
+		"python-envs.defaultEnvManager": "ms-python.python:system"
+	}
+}

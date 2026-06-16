@@ -38,9 +38,9 @@ class optimize():
         self.save = save
 
         self.cur_date = date.today()
-        base_dir = 'simulation data/optimization data'
-        os.makedirs(base_dir, exist_ok=True)
-        self.run_index = str(len(next(os.walk(base_dir))[1]))
+        self.base_dir = 'simulation data/optimization data'
+        os.makedirs(self.base_dir, exist_ok=True)
+        self.run_index = str(len(next(os.walk(self.base_dir))[1]))
 
     def save_run(self):
         '''
@@ -57,9 +57,16 @@ class optimize():
 
         self.dataframe = pd.DataFrame(data)
 
-        save_folder_name = 'parameter optimization run ' + self.run_index + '_' + self.cur_date.strftime("%d_%m_%Y")
-        self.directory = 'simulation data/optimization data/' + save_folder_name
-        os.mkdir(self.directory)
+        run_index = int(self.run_index)
+        while True:
+            save_folder_name = 'parameter optimization run ' + str(run_index) + '_' + self.cur_date.strftime("%d_%m_%Y")
+            self.directory = os.path.join(self.base_dir, save_folder_name)
+            try:
+                os.mkdir(self.directory)
+                break
+            except FileExistsError:
+                run_index += 1
+        self.run_index = str(run_index)
 
         log_path = self.directory + '/log'
         with open(log_path, 'w') as file:

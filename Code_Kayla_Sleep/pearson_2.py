@@ -11,7 +11,7 @@ from scipy.stats import pearsonr
 
 import ising as I
 import utils
-import config_pearson as cfg
+from Code_Kayla_Sleep import config_pearson as cfg
 import param_anneal as pa
 import temp_sweep as ts
 
