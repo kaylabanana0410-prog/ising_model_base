@@ -11,3 +11,6 @@ env/
 # Nested cloned repositories should not be committed into this repo.
 Ising_Model_Base/.git_nested_backup/
 Ising_Model_Base/Ising/
+
+# Local raw EEG/fMRI dataset; too large for this Git repo.
+AWS_EEG_FMRI_DATA_KAYLA/

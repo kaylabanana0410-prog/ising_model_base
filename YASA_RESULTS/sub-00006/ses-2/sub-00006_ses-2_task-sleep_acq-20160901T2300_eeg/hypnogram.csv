@@ -1,0 +1,14 @@
+Epoch,Subject,Session,Recording,RecordingEpoch,Time,Stage
+0,sub-00006,ses-2,sub-00006_ses-2_task-sleep_acq-20160901T2300_eeg,0,2016-09-01 22:58:32.191438+00:00,WAKE
+1,sub-00006,ses-2,sub-00006_ses-2_task-sleep_acq-20160901T2300_eeg,1,2016-09-01 22:59:02.191438+00:00,WAKE
+2,sub-00006,ses-2,sub-00006_ses-2_task-sleep_acq-20160901T2300_eeg,2,2016-09-01 22:59:32.191438+00:00,WAKE
+3,sub-00006,ses-2,sub-00006_ses-2_task-sleep_acq-20160901T2300_eeg,3,2016-09-01 23:00:02.191438+00:00,WAKE
+4,sub-00006,ses-2,sub-00006_ses-2_task-sleep_acq-20160901T2300_eeg,4,2016-09-01 23:00:32.191438+00:00,WAKE
+5,sub-00006,ses-2,sub-00006_ses-2_task-sleep_acq-20160901T2300_eeg,5,2016-09-01 23:01:02.191438+00:00,WAKE
+6,sub-00006,ses-2,sub-00006_ses-2_task-sleep_acq-20160901T2300_eeg,6,2016-09-01 23:01:32.191438+00:00,WAKE
+7,sub-00006,ses-2,sub-00006_ses-2_task-sleep_acq-20160901T2300_eeg,7,2016-09-01 23:02:02.191438+00:00,WAKE
+8,sub-00006,ses-2,sub-00006_ses-2_task-sleep_acq-20160901T2300_eeg,8,2016-09-01 23:02:32.191438+00:00,WAKE
+9,sub-00006,ses-2,sub-00006_ses-2_task-sleep_acq-20160901T2300_eeg,9,2016-09-01 23:03:02.191438+00:00,WAKE
+10,sub-00006,ses-2,sub-00006_ses-2_task-sleep_acq-20160901T2300_eeg,10,2016-09-01 23:03:32.191438+00:00,WAKE
+11,sub-00006,ses-2,sub-00006_ses-2_task-sleep_acq-20160901T2300_eeg,11,2016-09-01 23:04:02.191438+00:00,WAKE
+12,sub-00006,ses-2,sub-00006_ses-2_task-sleep_acq-20160901T2300_eeg,12,2016-09-01 23:04:32.191438+00:00,WAKE

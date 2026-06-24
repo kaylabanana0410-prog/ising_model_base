@@ -20,16 +20,16 @@ import temp_sweep as ts
 SEED          = 1
 N             = cf.regions
 
-ANNEAL_STEPS  = 10000
-ANNEAL_MAXFUN = 500
-ANNEAL_THERM  = 5000
+ANNEAL_STEPS  = 100 #10000
+ANNEAL_MAXFUN = 5 #500
+ANNEAL_THERM  = 50 #5000
 
-N_RESTARTS    = 5 ##  5 annealing runs and picks the best one
+N_RESTARTS    = 3 ##  was 5 :5 annealing runs and picks the best one
 
 T_MIN         = 2
-T_MAX         = 25
-T_STEPS       = 400
-TEMP_REPEATS  = 10
+T_MAX         = 18.5
+T_STEPS       = 50 #400
+TEMP_REPEATS  = 3 #10
 
 # True  = set empirical/simulated FC diagonals to 0 and compare off-diagonal FC only.
 # False = set empirical/simulated FC diagonals to 1 and include diagonals in FC correlations.
@@ -41,6 +41,7 @@ NULL_STEPS    = 2000
 NULL_THERM    = 1000
 
 BINS          = 30
+N_POST_CRIT_MATRICES = 5
 
 # Optional:
 # If you want to use the previous person's alpha = 2.07, set this to True.
@@ -85,6 +86,46 @@ def symmetric_norm_from_offdiag(mat, percentile=99, min_lim=0.05):
         lim = min_lim
 
     return TwoSlopeNorm(vmin=-lim, vcenter=0, vmax=lim), lim
+
+
+def evenly_spaced_indices(indices, n_select):
+    if len(indices) <= n_select:
+        return indices
+
+    positions = np.linspace(0, len(indices) - 1, n_select, dtype=int)
+    return indices[positions]
+
+
+def finite_vals(vals, label="array"):
+    vals = np.asarray(vals, dtype=float)
+    vals = vals[np.isfinite(vals)]
+
+    if vals.size == 0:
+        raise ValueError(f"{label} has no finite values left after removing NaN/inf values.")
+
+    return vals
+
+
+def safe_pearson(x, y):
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
+
+    mask = np.isfinite(x) & np.isfinite(y)
+    x = x[mask]
+    y = y[mask]
+
+    if x.size < 2:
+        return 0.0
+
+    if np.std(x) == 0 or np.std(y) == 0:
+        return 0.0
+
+    r = pearsonr(x, y)[0]
+
+    if not np.isfinite(r):
+        return 0.0
+
+    return r
 
 
 # ── data ──────────────────────────────────────────────────────────────────
@@ -321,7 +362,7 @@ set_fc_diagonal(sim_FC)
 
 sim_FC_vec = fc_compare_vec(sim_FC)
 
-r_best    = pearsonr(sim_FC_vec, rho_emp_vec)[0]
+r_best    = safe_pearson(sim_FC_vec, rho_emp_vec)
 dist_best = np.linalg.norm(sim_FC_vec - rho_emp_vec)
 diss_best = 1.0 - r_best
 
@@ -411,6 +452,61 @@ plt.close(fig3s)
 print("Saved: matrix_comparison_4.png, scatter_sim_vs_emp_4.png")
 
 
+# ── additional matrix comparisons after Tcrit ────────────────────────────
+post_crit_indices = np.where(T_global > T_crit)[0]
+best_idx = int(np.nanargmax(corr_arr))
+post_crit_indices = post_crit_indices[post_crit_indices != best_idx]
+post_crit_indices = evenly_spaced_indices(post_crit_indices, N_POST_CRIT_MATRICES)
+
+if len(post_crit_indices) > 0:
+    fig3_post, axes3_post = plt.subplots(
+        len(post_crit_indices),
+        3,
+        figsize=(15, 3.8 * len(post_crit_indices)),
+        constrained_layout=True,
+        squeeze=False,
+    )
+
+    fig3_post.suptitle(
+        f"Post-critical matrix comparisons  |  Tcrit={T_crit:.2f}  |  alpha={alpha_star:.2f}",
+        fontsize=13,
+        fontweight="bold"
+    )
+
+    print("\nPost-critical matrix comparisons:")
+
+    for row, idx in enumerate(post_crit_indices):
+        T_here = T_global[idx]
+        gd_here = sweep.ising_ar[idx]
+        sim_here = gd_here.FC.copy()
+        set_fc_diagonal(sim_here)
+
+        sim_here_vec = fc_compare_vec(sim_here)
+        r_here = safe_pearson(sim_here_vec, rho_emp_vec)
+        dist_here = np.linalg.norm(sim_here_vec - rho_emp_vec)
+
+        print(f"  T={T_here:.4f}  r={r_here:.4f}  dist={dist_here:.4f}")
+
+        row_panels = [
+            (sim_here, f"Simulated partial FC\nT={T_here:.2f}, r={r_here:.4f}", fc_norm),
+            (rho_emp, "Empirical partial FC", fc_norm),
+            (Jij_mat, "Structural connectivity  $J_{ij}$", j_norm),
+        ]
+
+        for ax, (mat, title, norm_to_use) in zip(axes3_post[row], row_panels):
+            im = ax.matshow(mat, cmap="RdBu_r", norm=norm_to_use)
+            ax.set_title(title, fontsize=10, pad=10)
+            ax.set_xlabel("region", fontsize=8)
+            ax.set_ylabel("region", fontsize=8)
+            plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+
+    plt.savefig("matrix_comparisons_post_Tcrit_4.png", dpi=150, bbox_inches="tight")
+    plt.close(fig3_post)
+    print("Saved: matrix_comparisons_post_Tcrit_4.png")
+else:
+    print("No post-critical temperatures available for extra matrix comparisons.")
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # STEP 4 : NULL DISTRIBUTION
 # ═══════════════════════════════════════════════════════════════════════════
@@ -434,17 +530,33 @@ def shuffle_jij(J):
     return J_null
 
 
+def ones_jij_like(J):
+    J_ones = np.ones_like(J, dtype=float)
+    np.fill_diagonal(J_ones, 0)
+    return J_ones
+
+
 def run_ising_avg(J, T_global_value, alpha, n_runs=NULL_RUNS):
-    mu_loc = np.mean(J, axis=0)
+    # IMPORTANT FIX:
+    # Partial-FC null models can have negative row/column means after shuffling Jij.
+    # If alpha is fractional (example: 2.07), negative_mu ** alpha becomes NaN.
+    # Use absolute mean strength so temperature multipliers stay non-negative.
+    mu_loc = np.abs(np.mean(J, axis=0))
 
-    if mu_loc.max() == 0:
-        raise ValueError("mu_loc.max() is zero, cannot normalize.")
+    max_mu = np.nanmax(mu_loc)
 
-    mu_loc = mu_loc / mu_loc.max()
+    if not np.isfinite(max_mu) or max_mu == 0:
+        print("WARNING: invalid mu_loc in null run; using ones multiplier.")
+        mu_loc = np.ones(J.shape[0], dtype=float)
+        max_mu = 1.0
+
+    mu_loc = mu_loc / max_mu
+    mu_loc = np.nan_to_num(mu_loc, nan=0.0, posinf=1.0, neginf=0.0)
 
     mu_loc_sorted = mu_loc[utils.cross_sort(mu_loc)]
 
     temp_arr = T_global_value * (mu_loc_sorted ** alpha)
+    temp_arr = np.nan_to_num(temp_arr, nan=T_global_value, posinf=T_global_value, neginf=T_global_value)
 
     fc_sum = np.zeros((N, N))
 
@@ -473,7 +585,7 @@ for i in range(N_NULL):
 
     vec_null = fc_compare_vec(rho_null)
 
-    r_null = pearsonr(vec_null, rho_emp_vec)[0]
+    r_null = safe_pearson(vec_null, rho_emp_vec)
 
     null_dist.append(np.linalg.norm(vec_null - rho_emp_vec))
     null_diss.append(1.0 - r_null)
@@ -486,14 +598,48 @@ for i in range(N_NULL):
             f"r={r_null:.4f}"
         )
 
-null_dist = np.array(null_dist)
-null_diss = np.array(null_diss)
+null_dist = finite_vals(null_dist, "null_dist")
+null_diss = finite_vals(null_diss, "null_diss")
 
 p_dist = np.mean(null_dist <= dist_best)
 p_diss = np.mean(null_diss <= diss_best)
 
 print(f"\nreal dist  = {dist_best:.4f} | null mean = {null_dist.mean():.4f} | p = {p_dist:.4f}")
 print(f"real diss  = {diss_best:.4f} | null mean = {null_diss.mean():.4f} | p = {p_diss:.4f}")
+
+
+ones_dist = []
+ones_diss = []
+J_ones = ones_jij_like(J_real)
+
+print("\nRunning constant-ones Jij null distribution")
+
+for i in range(N_NULL):
+    rho_ones = run_ising_avg(J_ones, T_best, alpha_star)
+
+    vec_ones = fc_compare_vec(rho_ones)
+
+    r_ones = safe_pearson(vec_ones, rho_emp_vec)
+
+    ones_dist.append(np.linalg.norm(vec_ones - rho_emp_vec))
+    ones_diss.append(1.0 - r_ones)
+
+    if (i + 1) % 10 == 0:
+        print(
+            f"  ones {i+1}/{N_NULL}  "
+            f"dist={ones_dist[-1]:.4f}  "
+            f"diss={ones_diss[-1]:.4f}  "
+            f"r={r_ones:.4f}"
+        )
+
+ones_dist = finite_vals(ones_dist, "ones_dist")
+ones_diss = finite_vals(ones_diss, "ones_diss")
+
+p_ones_dist = np.mean(ones_dist <= dist_best)
+p_ones_diss = np.mean(ones_diss <= diss_best)
+
+print(f"\nreal dist  = {dist_best:.4f} | ones null mean = {ones_dist.mean():.4f} | p = {p_ones_dist:.4f}")
+print(f"real diss  = {diss_best:.4f} | ones null mean = {ones_diss.mean():.4f} | p = {p_ones_diss:.4f}")
 
 
 # ── effect sizes ──────────────────────────────────────────────────────────
@@ -536,14 +682,22 @@ def cohens_magnitude(d):
 
 cd_dist  = cohens_d(null_dist, dist_best)
 cd_diss  = cohens_d(null_diss, diss_best)
+cd_ones_dist = cohens_d(ones_dist, dist_best)
+cd_ones_diss = cohens_d(ones_diss, diss_best)
 
 cld_dist = cliffs_delta(null_dist, dist_best)
 cld_diss = cliffs_delta(null_diss, diss_best)
+cld_ones_dist = cliffs_delta(ones_dist, dist_best)
+cld_ones_diss = cliffs_delta(ones_diss, diss_best)
 
 print(f"\nCohen's d  (dist) = {cd_dist:.4f}  [{cohens_magnitude(cd_dist)}]")
 print(f"Cohen's d  (diss) = {cd_diss:.4f}  [{cohens_magnitude(cd_diss)}]")
 print(f"Cliff's δ  (dist) = {cld_dist:.4f}  [{cliffs_magnitude(cld_dist)}]")
 print(f"Cliff's δ  (diss) = {cld_diss:.4f}  [{cliffs_magnitude(cld_diss)}]")
+print(f"Cohen's d  (ones dist) = {cd_ones_dist:.4f}  [{cohens_magnitude(cd_ones_dist)}]")
+print(f"Cohen's d  (ones diss) = {cd_ones_diss:.4f}  [{cohens_magnitude(cd_ones_diss)}]")
+print(f"Cliff's δ  (ones dist) = {cld_ones_dist:.4f}  [{cliffs_magnitude(cld_ones_dist)}]")
+print(f"Cliff's δ  (ones diss) = {cld_ones_diss:.4f}  [{cliffs_magnitude(cld_ones_diss)}]")
 
 
 # ── Figure 4 ──────────────────────────────────────────────────────────────
@@ -552,6 +706,7 @@ REAL_COLOR = "#C0392B"
 
 
 def plot_null(ax, null_vals, real_val, p_val, cd, cld, xlabel, title):
+    null_vals = finite_vals(null_vals, title)
     counts, edges = np.histogram(null_vals, bins=BINS)
     widths = np.diff(edges)
 
@@ -640,6 +795,42 @@ plt.close(fig4)
 print("Saved: ising_null_distributions_4.png")
 
 
+fig4_ones, axes4_ones = plt.subplots(1, 2, figsize=(14, 5), constrained_layout=True)
+
+fig4_ones.suptitle(
+    f"Constant-ones Jij null distribution  |  T_best = {T_best:.2f}  |  alpha = {alpha_star:.2f}  |  r = {r_best:.4f}",
+    fontsize=13,
+    fontweight="bold"
+)
+
+plot_null(
+    axes4_ones[0],
+    ones_dist,
+    dist_best,
+    p_ones_dist,
+    cd_ones_dist,
+    cld_ones_dist,
+    xlabel=r"euclidean distance  $||\rho_{sim} - \rho_{emp}||$",
+    title="ones Jij null — euclidean distance"
+)
+
+plot_null(
+    axes4_ones[1],
+    ones_diss,
+    diss_best,
+    p_ones_diss,
+    cd_ones_diss,
+    cld_ones_diss,
+    xlabel="dissimilarity  (1 − r)",
+    title="ones Jij null — dissimilarity"
+)
+
+plt.savefig("ising_null_distributions_ones_4.png", dpi=150, bbox_inches="tight")
+plt.close(fig4_ones)
+
+print("Saved: ising_null_distributions_ones_4.png")
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # SUMMARY
 # ═══════════════════════════════════════════════════════════════════════════
@@ -662,10 +853,16 @@ print(f"eucl. distance    = {dist_best:.4f}")
 print(f"dissimilarity     = {diss_best:.4f}")
 print(f"p (dist)          = {p_dist:.4f}")
 print(f"p (diss)          = {p_diss:.4f}")
+print(f"p ones (dist)     = {p_ones_dist:.4f}")
+print(f"p ones (diss)     = {p_ones_diss:.4f}")
 print(f"Cohen's d (dist)  = {cd_dist:.4f}  [{cohens_magnitude(cd_dist)}]")
 print(f"Cohen's d (diss)  = {cd_diss:.4f}  [{cohens_magnitude(cd_diss)}]")
 print(f"Cliff's δ (dist)  = {cld_dist:.4f}  [{cliffs_magnitude(cld_dist)}]")
 print(f"Cliff's δ (diss)  = {cld_diss:.4f}  [{cliffs_magnitude(cld_diss)}]")
+print(f"Cohen's d ones (dist) = {cd_ones_dist:.4f}  [{cohens_magnitude(cd_ones_dist)}]")
+print(f"Cohen's d ones (diss) = {cd_ones_diss:.4f}  [{cohens_magnitude(cd_ones_diss)}]")
+print(f"Cliff's δ ones (dist) = {cld_ones_dist:.4f}  [{cliffs_magnitude(cld_ones_dist)}]")
+print(f"Cliff's δ ones (diss) = {cld_ones_diss:.4f}  [{cliffs_magnitude(cld_ones_diss)}]")
 
 print("\nOutput files:")
 for f in [
@@ -674,6 +871,8 @@ for f in [
     "correlation_vs_T_4.png",
     "matrix_comparison_4.png",
     "scatter_sim_vs_emp_4.png",
-    "ising_null_distributions_4.png"
+    "matrix_comparisons_post_Tcrit_4.png",
+    "ising_null_distributions_4.png",
+    "ising_null_distributions_ones_4.png"
 ]:
     print(f"  {f}")
