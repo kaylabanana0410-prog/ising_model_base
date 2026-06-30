@@ -18,12 +18,12 @@ RHO_SIMULATED_PATH = OUTPUT_DIR / "Rho_sim_pearson.csv"
 # Data settings
 SUBJECT_IDS = list(range(2, 26))
 N_SUBJECTS = len(SUBJECT_IDS)
-THRESHOLD = 0.05
+THRESHOLD = 0.03
 PARTIAL = False
 
 # True  = set empirical/simulated FC diagonals to 0 and compare off-diagonal FC only.
 # False = set empirical/simulated FC diagonals to 1 and include diagonals in FC correlations.
-ZERO_FC_DIAGONAL = False
+ZERO_FC_DIAGONAL = True
 
 # Simulation settings
 SIM_STEPS = 10000

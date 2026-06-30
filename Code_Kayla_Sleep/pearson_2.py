@@ -9,7 +9,7 @@ import matplotlib.ticker as mticker
 from matplotlib.colors import TwoSlopeNorm
 from scipy.stats import pearsonr
 
-import ising as I
+import ising3 as I
 import utils
 from Code_Kayla_Sleep import config_pearson as cfg
 import param_anneal as pa
@@ -20,16 +20,22 @@ import temp_sweep as ts
 SEED          = 1
 N             = cfg.regions
 
-ANNEAL_STEPS  = 100 #10000
-ANNEAL_MAXFUN = 5 #500
-ANNEAL_THERM  = 50 #5000
+ANNEAL_STEPS  = 1000 #10000
+ANNEAL_MAXFUN = 500 #500
+ANNEAL_THERM  = 5000 #5000
 
-N_RESTARTS    = 3 ##  was 5 :5 annealing runs and picks the best one
+N_RESTARTS    = 10 ##  was 5 :5 annealing runs and picks the best one
+ANNEAL_BOUNDS = ((0.1, 10), (-3, 3))
+REFINE_T_WINDOW = 1.0
+REFINE_ALPHA_WINDOW = 0.5
+REFINE_MAXFUN = 250
 
-T_MIN         = 2
-T_MAX         = 18.5
-T_STEPS       = 50 #400
-TEMP_REPEATS  = 3 #10
+T_MIN         = 1.5
+T_MAX         = 30
+T_STEPS       = 150 #400
+TEMP_REPEATS  = 15 #10
+ZOOM_SWEEP_AROUND_T_STAR = False
+SWEEP_T_WINDOW = 2.0
 
 # True  = set empirical/simulated FC diagonals to 0 and compare off-diagonal FC only.
 # False = set empirical/simulated FC diagonals to 1 and include diagonals in FC correlations.
@@ -134,14 +140,39 @@ def evenly_spaced_indices(indices, n_select):
     return indices[positions]
 
 
+def refine_bounds(center, base_bounds=ANNEAL_BOUNDS):
+    T_center, alpha_center = center
+    (T_low, T_high), (alpha_low, alpha_high) = base_bounds
+
+    refined_T = (
+        max(T_low, T_center - REFINE_T_WINDOW),
+        min(T_high, T_center + REFINE_T_WINDOW),
+    )
+    refined_alpha = (
+        max(alpha_low, alpha_center - REFINE_ALPHA_WINDOW),
+        min(alpha_high, alpha_center + REFINE_ALPHA_WINDOW),
+    )
+
+    return refined_T, refined_alpha
+
+
 # ── data ──────────────────────────────────────────────────────────────────
 J_real  = np.genfromtxt(cfg.AVG_JIJ_NEW_PATH, delimiter=",").astype(float)
 np.fill_diagonal(J_real, 0)
 rho_emp = cfg.avg_FC.copy()          # Pearson empirical FC throughout
-multiplier = utils.normalize_array(np.mean(J_real, axis=0))
+emp_FC1 = cfg.FC_1.copy()
+emp_FC2 = cfg.FC_2.copy()
+emp_FC3 = cfg.FC_3.copy()
+# Use non-negative coupling strength for temperature scaling.
+# Signed Pearson Jij can otherwise produce negative multipliers, and
+# negative ** fractional alpha becomes NaN.
+multiplier = utils.normalize_array(np.mean(np.abs(J_real), axis=0))
 
 # Set FC diagonal for plotting/saving and choose whether comparisons include it.
 set_fc_diagonal(rho_emp)
+set_fc_diagonal(emp_FC1)
+set_fc_diagonal(emp_FC2)
+set_fc_diagonal(emp_FC3)
 
 rho_emp_vec = clean_vec(fc_compare_vec(rho_emp))
 
@@ -155,7 +186,7 @@ print("emp FC neg fraction: ", np.mean(rho_emp_vec < 0))
 # STEP 1 : PARAMETER ANNEALING
 # ═══════════════════════════════════════════════════════════════════════════
 print("\n" + "=" * 65)
-print("STEP 1 : PARAMETER ANNEALING — searching (T*, alpha*)")
+print("STEP 1 : PARAMETER ANNEALING — broad search (T*, alpha*)")
 print("=" * 65)
 
 best_result = None
@@ -181,10 +212,11 @@ for restart_idx in range(N_RESTARTS):
         emp_FC          = rho_emp,
         therm           = ANNEAL_THERM,
         no_local_search = False,
-        show            = False
+        show            = False,
+        bounds          = ANNEAL_BOUNDS
     )
 
-    print(f"restart best r = {max(optim.correlate):.4f}")
+    print(f"broad restart best r = {max(optim.correlate):.4f}")
     print(f"restart fun    = {result.fun:.6f}")
 
     if result.fun < best_fun:
@@ -192,8 +224,42 @@ for restart_idx in range(N_RESTARTS):
         best_result = result
         best_optim = optim
 
-result = best_result
-optim = best_optim
+refined_bounds = refine_bounds(best_result.x)
+print("\n" + "=" * 65)
+print(
+    "STEP 1B : PARAMETER ANNEALING — refined search "
+    f"T={refined_bounds[0]}, alpha={refined_bounds[1]}"
+)
+print("=" * 65)
+
+np.random.seed(SEED + N_RESTARTS)
+refine_optim = pa.optimize(
+    ising      = I.Jij_sorted_ising,
+    Jij        = J_real,
+    partial    = False,
+    multiplier = multiplier,
+    save       = False
+)
+
+refine_result = refine_optim.anneal(
+    steps           = ANNEAL_STEPS,
+    maxfun          = REFINE_MAXFUN,
+    emp_FC          = rho_emp,
+    therm           = ANNEAL_THERM,
+    no_local_search = False,
+    show            = False,
+    bounds          = refined_bounds
+)
+
+print(f"refined best r = {max(refine_optim.correlate):.4f}")
+print(f"refined fun    = {refine_result.fun:.6f}")
+
+if refine_result.fun < best_fun:
+    result = refine_result
+    optim = refine_optim
+else:
+    result = best_result
+    optim = best_optim
 
 T_star_annealed     = result.x[0]
 alpha_star_annealed = result.x[1]
@@ -218,17 +284,25 @@ else:
 
 T_star = T_star_annealed
 
+if ZOOM_SWEEP_AROUND_T_STAR:
+    T_sweep_min = max(ANNEAL_BOUNDS[0][0], T_star - SWEEP_T_WINDOW)
+    T_sweep_max = min(ANNEAL_BOUNDS[0][1], T_star + SWEEP_T_WINDOW)
+else:
+    T_sweep_min = T_MIN
+    T_sweep_max = T_MAX
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # STEP 2 : TEMPERATURE SWEEP
 # ═══════════════════════════════════════════════════════════════════════════
 print("\n" + "=" * 65)
 print(f"STEP 2 : TEMPERATURE SWEEP  (alpha = {alpha_star:.4f})")
+print(f"         T range = {T_sweep_min:.3f} to {T_sweep_max:.3f}")
 print("=" * 65)
 
 sweep = ts.simulated_FC_vs_T_global(
-    min_temp   = T_MIN,
-    max_temp   = T_MAX,
+    min_temp   = T_sweep_min,
+    max_temp   = T_sweep_max,
     temp_step  = T_STEPS,
     alpha      = alpha_star,
     Jij        = J_real,
@@ -243,7 +317,11 @@ sweep.simulate(
     partial        = False,
     diag           = not ZERO_FC_DIAGONAL,
     text           = True,
-    n_repeats      = TEMP_REPEATS
+    n_repeats      = TEMP_REPEATS,
+    emp_FC1        = emp_FC1,
+    emp_FC2        = emp_FC2,
+    emp_FC3        = emp_FC3,
+    avg_FC         = rho_emp
 )
 
 # ── NaN guard ─────────────────────────────────────────────────────────────
@@ -294,8 +372,8 @@ fig1.suptitle(
 panels = [
     (axes1[0, 0], avg_energy, avg_energy_se, r"average energy $\langle E \rangle$", "Energy vs T"),
     (axes1[0, 1], avg_mag, avg_mag_se, r"average $|M|$", "|Magnetization| vs T"),
-    (axes1[1, 0], suscept, suscept_se, r"susceptibility $\chi$", "Susceptibility vs T"),
-    (axes1[1, 1], spec_heat, spec_heat_se, r"specific heat $C$", "Specific Heat vs T"),
+    (axes1[1, 1], suscept, suscept_se, r"susceptibility $\chi$", "Susceptibility vs T"),
+    (axes1[1, 0], spec_heat, spec_heat_se, r"specific heat $C$", "Specific Heat vs T"),
 ]
 
 for ax, data, se, ylabel, title in panels:
@@ -644,9 +722,13 @@ print(f"real diss  = {diss_best:.4f} | null mean = {null_diss.mean():.4f} | p = 
 
 ones_dist = []
 ones_diss = []
-J_ones = ones_jij_like(J_real)
+J_ones = pearson_threshold_jij(
+    ones_jij_like(J_real),
+    rho_emp,
+    cfg.THRESHOLD,
+)
 
-print("\nRunning constant-ones Jij null distribution")
+print("\nRunning thresholded constant-ones Jij null distribution")
 
 for i in range(N_NULL):
     rho_ones = run_ising_avg(J_ones, T_best, alpha_star)

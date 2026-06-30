@@ -9,7 +9,7 @@ import matplotlib.ticker as mticker
 from matplotlib.colors import TwoSlopeNorm
 from scipy.stats import pearsonr
 
-import ising as I
+import ising3 as I
 import utils
 import config as cf
 import param_anneal as pa
@@ -20,20 +20,26 @@ import temp_sweep as ts
 SEED          = 1
 N             = cf.regions
 
-ANNEAL_STEPS  = 100 #10000
-ANNEAL_MAXFUN = 5 #500
-ANNEAL_THERM  = 50 #5000
+ANNEAL_STEPS  = 100#10000
+ANNEAL_MAXFUN = 500 #500
+ANNEAL_THERM  = 5000 #5000
 
-N_RESTARTS    = 3 ##  was 5 :5 annealing runs and picks the best one
+N_RESTARTS    = 10 ##  was 5 :5 annealing runs and picks the best one
+ANNEAL_BOUNDS = ((0.1, 10), (-3, 3))
+REFINE_T_WINDOW = 1.0
+REFINE_ALPHA_WINDOW = 0.5
+REFINE_MAXFUN = 40
 
 T_MIN         = 2
-T_MAX         = 18.5
-T_STEPS       = 50 #400
-TEMP_REPEATS  = 3 #10
+T_MAX         = 30
+T_STEPS       = 60 #400
+TEMP_REPEATS  = 10 #10
+ZOOM_SWEEP_AROUND_T_STAR = False
+SWEEP_T_WINDOW = 2.0
 
 # True  = set empirical/simulated FC diagonals to 0 and compare off-diagonal FC only.
 # False = set empirical/simulated FC diagonals to 1 and include diagonals in FC correlations.
-ZERO_FC_DIAGONAL = False
+ZERO_FC_DIAGONAL = True
 
 N_NULL        = 100
 NULL_RUNS     = 5
@@ -48,6 +54,9 @@ N_POST_CRIT_MATRICES = 5
 # For your own optimized result, keep it False.
 USE_FIXED_ALPHA = False
 FIXED_ALPHA     = 2.07
+SKIP_ANNEAL_FOR_DEBUG = False
+DEBUG_ALPHA = 1.8480348021548707
+DEBUG_T_STAR = 5.8275377133440305
 
 BLUE   = "#2E86AB"
 RED    = "#E84855"
@@ -96,6 +105,22 @@ def evenly_spaced_indices(indices, n_select):
     return indices[positions]
 
 
+def refine_bounds(center, base_bounds=ANNEAL_BOUNDS):
+    T_center, alpha_center = center
+    (T_low, T_high), (alpha_low, alpha_high) = base_bounds
+
+    refined_T = (
+        max(T_low, T_center - REFINE_T_WINDOW),
+        min(T_high, T_center + REFINE_T_WINDOW),
+    )
+    refined_alpha = (
+        max(alpha_low, alpha_center - REFINE_ALPHA_WINDOW),
+        min(alpha_high, alpha_center + REFINE_ALPHA_WINDOW),
+    )
+
+    return refined_T, refined_alpha
+
+
 def finite_vals(vals, label="array"):
     vals = np.asarray(vals, dtype=float)
     vals = vals[np.isfinite(vals)]
@@ -131,9 +156,15 @@ def safe_pearson(x, y):
 # ── data ──────────────────────────────────────────────────────────────────
 J_real  = cf.avg_Jij.copy()
 rho_emp = cf.avg_FCp.copy()          # partial empirical FC throughout
+emp_FC1 = cf.FC_1p.copy()
+emp_FC2 = cf.FC_2p.copy()
+emp_FC3 = cf.FC_3p.copy()
 
 # Set FC diagonal for plotting/saving and choose whether comparisons include it.
 set_fc_diagonal(rho_emp)
+set_fc_diagonal(emp_FC1)
+set_fc_diagonal(emp_FC2)
+set_fc_diagonal(emp_FC3)
 
 rho_emp_vec = fc_compare_vec(rho_emp)
 
@@ -147,57 +178,99 @@ print("emp FC neg fraction: ", np.mean(rho_emp_vec < 0))
 # STEP 1 : PARAMETER ANNEALING
 # ═══════════════════════════════════════════════════════════════════════════
 print("\n" + "=" * 65)
-print("STEP 1 : PARAMETER ANNEALING — searching (T*, alpha*)")
+print("STEP 1 : PARAMETER ANNEALING — broad search (T*, alpha*)")
 print("=" * 65)
 
-best_result = None
-best_optim = None
-best_fun = np.inf
+if SKIP_ANNEAL_FOR_DEBUG:
+    T_star_annealed = DEBUG_T_STAR
+    alpha_star_annealed = DEBUG_ALPHA
+    print("Skipping partial-FC annealing for debug rerun.")
+    print(f"Using debug T reference = {T_star_annealed:.4f}")
+    print(f"Using debug alpha       = {alpha_star_annealed:.4f}")
+else:
+    best_result = None
+    best_optim = None
+    best_fun = np.inf
 
-for restart_idx in range(N_RESTARTS):
-    np.random.seed(SEED + restart_idx)
+    for restart_idx in range(N_RESTARTS):
+        np.random.seed(SEED + restart_idx)
 
-    print(f"\nRestart {restart_idx + 1}/{N_RESTARTS}")
+        print(f"\nRestart {restart_idx + 1}/{N_RESTARTS}")
 
-    optim = pa.optimize(
+        optim = pa.optimize(
+            ising      = I.Jij_sorted_ising,
+            Jij        = J_real,
+            partial    = True,
+            multiplier = utils.normalize_array(cf.ind_avg_Jij),
+            save       = (restart_idx == 0)
+        )
+        
+        result = optim.anneal(
+            steps           = ANNEAL_STEPS,
+            maxfun          = ANNEAL_MAXFUN,
+            emp_FC          = rho_emp,
+            therm           = ANNEAL_THERM,
+            no_local_search = False,
+            show            = False,
+            bounds          = ANNEAL_BOUNDS
+        )
+
+        print(f"broad restart best r = {max(optim.correlate):.4f}")
+        print(f"restart fun    = {result.fun:.6f}")
+
+        if result.fun < best_fun:
+            best_fun = result.fun
+            best_result = result
+            best_optim = optim
+
+    refined_bounds = refine_bounds(best_result.x)
+    print("\n" + "=" * 65)
+    print(
+        "STEP 1B : PARAMETER ANNEALING — refined search "
+        f"T={refined_bounds[0]}, alpha={refined_bounds[1]}"
+    )
+    print("=" * 65)
+
+    np.random.seed(SEED + N_RESTARTS)
+    refine_optim = pa.optimize(
         ising      = I.Jij_sorted_ising,
         Jij        = J_real,
         partial    = True,
         multiplier = utils.normalize_array(cf.ind_avg_Jij),
-        save       = (restart_idx == 0)
+        save       = False
     )
-    
-    result = optim.anneal(
+
+    refine_result = refine_optim.anneal(
         steps           = ANNEAL_STEPS,
-        maxfun          = ANNEAL_MAXFUN,
+        maxfun          = REFINE_MAXFUN,
         emp_FC          = rho_emp,
         therm           = ANNEAL_THERM,
         no_local_search = False,
-        show            = False
+        show            = False,
+        bounds          = refined_bounds
     )
 
-    print(f"restart best r = {max(optim.correlate):.4f}")
-    print(f"restart fun    = {result.fun:.6f}")
+    print(f"refined best r = {max(refine_optim.correlate):.4f}")
+    print(f"refined fun    = {refine_result.fun:.6f}")
 
-    if result.fun < best_fun:
-        best_fun = result.fun
-        best_result = result
-        best_optim = optim
+    if refine_result.fun < best_fun:
+        result = refine_result
+        optim = refine_optim
+    else:
+        result = best_result
+        optim = best_optim
 
-result = best_result
-optim = best_optim
+    T_star_annealed     = result.x[0]
+    alpha_star_annealed = result.x[1]
 
-T_star_annealed     = result.x[0]
-alpha_star_annealed = result.x[1]
+    print(f"\nAnnealed T*     = {T_star_annealed:.4f}")
+    print(f"Annealed alpha* = {alpha_star_annealed:.4f}")
+    print(f"Annealing best r = {max(optim.correlate):.4f}")
 
-print(f"\nAnnealed T*     = {T_star_annealed:.4f}")
-print(f"Annealed alpha* = {alpha_star_annealed:.4f}")
-print(f"Annealing best r = {max(optim.correlate):.4f}")
-
-optim.plot_error(show=False)
-plt.savefig("param_anneal_error_4.png", dpi=150, bbox_inches="tight")
-plt.close()
-print("Saved: param_anneal_error_4.png")
+    optim.plot_error(show=False)
+    plt.savefig("param_anneal_error_4.png", dpi=150, bbox_inches="tight")
+    plt.close()
+    print("Saved: param_anneal_error_4.png")
 
 
 # ── choose alpha ──────────────────────────────────────────────────────────
@@ -210,17 +283,25 @@ else:
 
 T_star = T_star_annealed
 
+if ZOOM_SWEEP_AROUND_T_STAR:
+    T_sweep_min = max(ANNEAL_BOUNDS[0][0], T_star - SWEEP_T_WINDOW)
+    T_sweep_max = min(ANNEAL_BOUNDS[0][1], T_star + SWEEP_T_WINDOW)
+else:
+    T_sweep_min = T_MIN
+    T_sweep_max = T_MAX
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # STEP 2 : TEMPERATURE SWEEP
 # ═══════════════════════════════════════════════════════════════════════════
 print("\n" + "=" * 65)
 print(f"STEP 2 : TEMPERATURE SWEEP  (alpha = {alpha_star:.4f})")
+print(f"         T range = {T_sweep_min:.3f} to {T_sweep_max:.3f}")
 print("=" * 65)
 
 sweep = ts.simulated_FC_vs_T_global(
-    min_temp   = T_MIN,
-    max_temp   = T_MAX,
+    min_temp   = T_sweep_min,
+    max_temp   = T_sweep_max,
     temp_step  = T_STEPS,
     alpha      = alpha_star,
     Jij        = J_real,
@@ -235,7 +316,11 @@ sweep.simulate(
     partial        = True,
     diag           = not ZERO_FC_DIAGONAL,
     text           = True,
-    n_repeats      = TEMP_REPEATS
+    n_repeats      = TEMP_REPEATS,
+    emp_FC1        = emp_FC1,
+    emp_FC2        = emp_FC2,
+    emp_FC3        = emp_FC3,
+    avg_FC         = rho_emp
 )
 
 # ── NaN guard ─────────────────────────────────────────────────────────────
@@ -377,11 +462,7 @@ print(f"dissimilarity  = {diss_best:.4f}")
 
 # ── color normalization ──────────────────────────────────────────────────
 # Use one shared norm for simulated and empirical FC.
-combined_fc = np.concatenate([sim_FC_vec, rho_emp_vec])
-fc_lim = np.percentile(np.abs(combined_fc), 99)
-
-if not np.isfinite(fc_lim) or fc_lim < 0.05:
-    fc_lim = 0.2
+fc_lim = 0.3
 
 fc_norm = TwoSlopeNorm(vmin=-fc_lim, vcenter=0, vmax=fc_lim)
 
