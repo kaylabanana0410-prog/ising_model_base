@@ -3,6 +3,15 @@
 # Cleaned version
 # ═══════════════════════════════════════════════════════════════════════════
 
+import sys
+from pathlib import Path
+
+CODE_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = CODE_DIR.parent
+
+sys.path.insert(0, str(PROJECT_ROOT))
+sys.path.insert(0, str(CODE_DIR))
+
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
