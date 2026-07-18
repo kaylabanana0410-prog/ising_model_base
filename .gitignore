@@ -8,9 +8,23 @@ env/
 
 .idea/
 
-# Nested cloned repositories should not be committed into this repo.
-Ising_Model_Base/.git_nested_backup/
-Ising_Model_Base/Ising/
+# Raw sleep EEG/fMRI data is too large for GitHub.
+kayla_1/Sleep_Project/
 
-# Local raw EEG/fMRI dataset; too large for this Git repo.
+# Generated GIM outputs; scripts can recreate these.
+kayla_1/Project_1/GIM_pngs/
+kayla_1/Project_1/Jij_new_pearson/
+kayla_1/Project_1/threshold_verification/
+kayla_1/__pycache__/
+kayla_1/Project_1/__pycache__/
+
+# Nested cloned repositories and generated simulation outputs.
+steven/.git/
+steven/__pycache__/
+steven/simulation data/
+steven/simulation data_2/
+steven/simulation data_3/
+simulation data/
+
+# Previous local raw-data folder names.
 AWS_EEG_FMRI_DATA_KAYLA/
